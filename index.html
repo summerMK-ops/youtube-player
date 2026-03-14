@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0f0918">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Trancy">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Trancy Style YouTube Explorer</title>
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icons/app-icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;700;800&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="font-small">
+  <div class="app-shell">
+    <main class="workspace">
+      <section class="panel player-panel">
+        <div class="section-title">
+          <h1>Player</h1>
+          <p>Load a YouTube video and study with subtitles.</p>
+        </div>
+
+        <div class="player-wrap">
+          <div id="player"></div>
+        </div>
+
+        <div class="now-playing">
+          <div class="now-playing-main">
+            <span class="mini-label">Now Playing</span>
+            <p id="video-title" class="video-title">Select a video to start.</p>
+            <p id="video-meta" class="video-meta">Channel and duration will appear here.</p>
+            <p id="repeat-status" class="repeat-status">Repeat is off.</p>
+          </div>
+        </div>
+      </section>
+
+      <aside class="panel transcript-panel">
+        <p id="subtitle-status" class="subtitle-status sr-only">Subtitle status</p>
+        <div id="transcript-list" class="transcript-list"></div>
+
+        <div id="words-panel" class="side-popover hidden">
+          <div class="side-popover-header">
+            <h3>Saved Words</h3>
+            <button id="words-close" class="ghost icon-button icon-button-small" type="button">Close</button>
+          </div>
+          <div id="saved-words-list" class="saved-words-list"></div>
+        </div>
+
+        <div id="favorites-panel" class="side-popover hidden">
+          <div class="side-popover-header">
+            <h3>Favorites</h3>
+            <button id="favorites-close" class="ghost icon-button icon-button-small" type="button">Close</button>
+          </div>
+          <div id="favorites-list" class="favorites-list"></div>
+        </div>
+
+        <div id="settings-panel" class="side-popover hidden">
+          <div class="side-popover-header">
+            <h3>Settings</h3>
+            <button id="settings-close" class="ghost icon-button icon-button-small" type="button">Close</button>
+          </div>
+
+          <div class="field-grid transcript-controls">
+            <label class="field">
+              <span>Subtitle Track</span>
+              <select id="subtitle-track"></select>
+            </label>
+
+            <label class="field">
+              <span>Display Mode</span>
+              <select id="display-mode">
+                <option value="both">Original + Translation</option>
+                <option value="original">Original only</option>
+                <option value="translation">Translation only</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Translation Language</span>
+              <select id="translation-language">
+                <option value="ja" selected>Japanese</option>
+                <option value="en">English</option>
+                <option value="ko">Korean</option>
+                <option value="zh-CN">Chinese</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Provider</span>
+              <select id="translation-provider">
+                <option value="google" selected>Google</option>
+                <option value="deepl">DeepL</option>
+              </select>
+            </label>
+
+            <label class="field">
+              <span>Font Size</span>
+              <select id="font-size-mode">
+                <option value="tiny">Tiny</option>
+                <option value="small" selected>Small</option>
+                <option value="medium">Medium</option>
+                <option value="large">Large</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="toggle-row settings-toggles">
+            <label class="toggle">
+              <input id="auto-fetch" type="checkbox" checked>
+              <span>Auto fetch subtitles</span>
+            </label>
+            <label class="toggle">
+              <input id="auto-scroll" type="checkbox" checked>
+              <span>Auto scroll</span>
+            </label>
+            <label class="toggle">
+              <input id="highlight-translation" type="checkbox" checked>
+              <span>Highlight translation</span>
+            </label>
+          </div>
+        </div>
+
+        <div id="dictionary-backdrop" class="dictionary-backdrop hidden"></div>
+        <div id="dictionary-popup" class="dictionary-popup hidden">
+          <div class="dictionary-header">
+            <h3 id="dictionary-word">Word</h3>
+            <button id="dictionary-close" class="ghost icon-button icon-button-small" type="button">Close</button>
+          </div>
+          <p id="dictionary-phonetic" class="dictionary-phonetic"></p>
+          <div id="dictionary-body" class="dictionary-body">Dictionary details will appear here.</div>
+          <button id="save-word" class="primary save-word-button" type="button">Save Word</button>
+        </div>
+      </aside>
+
+      <section class="panel control-panel">
+        <p id="current-cue-time" class="sr-only">00:00 - 00:00</p>
+        <div class="current-subtitle-box current-copy-cache" aria-hidden="true">
+          <p id="current-original" class="current-line">No subtitles yet.</p>
+          <p id="current-translation" class="current-translation">Translation will appear here.</p>
+        </div>
+
+        <div class="transport-progress">
+          <div class="time-rail">
+            <span id="current-time-label" class="time-label">00:00</span>
+            <span id="duration-label" class="time-label">00:00</span>
+          </div>
+          <input id="seek-slider" class="seek-slider" type="range" min="0" max="100" value="0" step="0.1" aria-label="Seek" />
+        </div>
+
+        <div class="player-controls transport-controls compact-controls">
+          <button id="seek-back-10" class="ghost control-button transport-button" type="button" aria-label="Back 10 seconds">10&lt;</button>
+          <button id="seek-back-5" class="ghost control-button transport-button" type="button" aria-label="Back 5 seconds">5&lt;</button>
+          <button id="toggle-playback" class="primary control-button primary-control transport-play" type="button" aria-label="Play">
+            <span class="transport-play-icon" aria-hidden="true">&#9654;</span>
+          </button>
+          <button id="seek-forward-5" class="ghost control-button transport-button" type="button" aria-label="Forward 5 seconds">5&gt;</button>
+          <button id="seek-forward-10" class="ghost control-button transport-button" type="button" aria-label="Forward 10 seconds">10&gt;</button>
+        </div>
+
+        <div class="player-secondary-controls compact-secondary-controls">
+          <button id="toggle-favorite" class="ghost compact-icon-button" type="button" aria-label="Favorite">&#9825;</button>
+          <button id="repeat-current-cue" class="ghost compact-icon-button" type="button" aria-label="Repeat current cue">1x</button>
+          <button id="repeat-current-group" class="ghost compact-icon-button" type="button" aria-label="Repeat sentence">AB</button>
+          <button id="jump-current" class="ghost compact-icon-button" type="button" aria-label="Jump to current cue">^</button>
+          <label class="speed-control compact-speed-control">
+            <span>Speed</span>
+            <select id="playback-rate" class="ghost speed-select">
+              <option value="0.5">0.5x</option>
+              <option value="0.75">0.75x</option>
+              <option value="1" selected>1.0x</option>
+              <option value="1.25">1.25x</option>
+              <option value="1.5">1.5x</option>
+              <option value="1.75">1.75x</option>
+              <option value="2">2.0x</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="transcript-actions compact-transcript-actions">
+          <button id="words-toggle" class="ghost icon-button" type="button" aria-expanded="false" aria-controls="words-panel">Words</button>
+          <button id="favorites-toggle" class="ghost icon-button" type="button" aria-expanded="false" aria-controls="favorites-panel">Fav</button>
+          <button id="settings-toggle" class="ghost icon-button" type="button" aria-expanded="false" aria-controls="settings-panel">Set</button>
+        </div>
+
+        <label class="field compact-load-field">
+          <span>YouTube URL or Video ID</span>
+          <div class="inline-input">
+            <input id="youtube-url" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+            <button id="load-video" class="primary" type="button">Load</button>
+          </div>
+        </label>
+      </section>
+
+      <section class="panel search-panel">
+        <div class="section-title">
+          <h2>Search</h2>
+          <p>Search YouTube and open recommendations.</p>
+        </div>
+
+        <label class="field">
+          <span>Search Query</span>
+          <div class="inline-input">
+            <input id="search-query" type="text" placeholder="english listening practice / TED / JavaScript tutorial" />
+            <button id="search-button" class="primary" type="button">Search</button>
+          </div>
+        </label>
+
+        <div class="search-meta">
+          <p id="search-status">Enter a keyword to search.</p>
+        </div>
+
+        <div class="search-grid search-grid-wide">
+          <div>
+            <div class="section-title transcript-title-block">
+              <h2 class="subhead">Results</h2>
+            </div>
+            <div id="search-results" class="video-list"></div>
+          </div>
+
+          <div>
+            <div class="section-title transcript-title-block">
+              <h2 class="subhead">Recommendations</h2>
+              <p id="recommendation-status" class="panel-status">Recommendations will appear here.</p>
+            </div>
+            <div id="recommendations" class="video-list compact"></div>
+          </div>
+
+          <div class="sample-box">
+            <div>
+              <h3>Subtitle File</h3>
+              <p>Load a local VTT, SRT, or JSON subtitle file.</p>
+            </div>
+            <label class="field">
+              <span>Subtitle File</span>
+              <input id="subtitle-file" type="file" accept=".vtt,.srt,.json" />
+            </label>
+            <button id="load-sample" class="ghost" type="button">Sample</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="https://www.youtube.com/iframe_api"></script>
+  <script src="./app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("/sw.js").catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>
