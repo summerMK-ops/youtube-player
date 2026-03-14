@@ -6,6 +6,7 @@ const path = require("node:path");
 const { URL } = require("node:url");
 const { spawn } = require("node:child_process");
 const ffmpegPath = require("ffmpeg-static");
+const ytdl = require("ytdl-core");
 
 const rootDir = __dirname;
 const port = Number(process.env.PORT || 3000);
@@ -28,6 +29,14 @@ let transformersModulePromise = null;
 let youtubeiModulePromise = null;
 let innertubePromise = null;
 const asrPipelineCache = new Map();
+
+function createRequestHeaders(extraHeaders = {}) {
+  return {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36",
+    "Accept-Language": "en-US,en;q=0.9,ja;q=0.8",
+    ...extraHeaders
+  };
+}
 
 function sendJson(response, statusCode, payload) {
   response.writeHead(statusCode, {
@@ -289,9 +298,7 @@ function extractAnyJsonObject(html, markers) {
 
 async function fetchPage(url) {
   const response = await fetch(url, {
-    headers: {
-      "User-Agent": "Mozilla/5.0 Codex Transcript App"
-    }
+    headers: createRequestHeaders()
   });
 
   if (!response.ok) {
@@ -421,7 +428,8 @@ async function fetchCaptionTracks(videoId) {
       if (trackData.tracks.length) {
         return trackData;
       }
-    } catch (_error) {
+    } catch (error) {
+      console.warn(`[transcript] youtubei track lookup failed for ${videoId} client=${client}: ${String(error?.message || error)}`);
       // Fall through to the next client or HTML parsing.
     }
   }
@@ -457,7 +465,7 @@ function buildTrackUrl(baseUrl, options = {}) {
 
 async function fetchTrackCues(track, targetLanguage, provider = "google") {
   const originalResponse = await fetch(buildTrackUrl(track.baseUrl), {
-    headers: { "User-Agent": "Mozilla/5.0 Codex Transcript App" }
+    headers: createRequestHeaders()
   });
 
   if (!originalResponse.ok) {
@@ -770,6 +778,84 @@ async function getTranscriptWithAggressiveFallback(videoId, trackIndex, language
         `字幕取得とASRフォールバックの両方に失敗しました。caption=${captionErrorMessage} / asr=${asrErrorMessage}`
       );
     }
+  }
+}
+
+async function fetchCaptionTracks(videoId) {
+  for (const client of ["IOS", "WEB"]) {
+    try {
+      const trackData = await fetchCaptionTracksFromYoutubei(videoId, client);
+      if (trackData.tracks.length) {
+        return trackData;
+      }
+    } catch (error) {
+      console.warn(`[transcript] youtubei track lookup failed for ${videoId} client=${client}: ${String(error?.message || error)}`);
+    }
+  }
+
+  try {
+    const html = await fetchPage(`https://www.youtube.com/watch?v=${encodeURIComponent(videoId)}`);
+    const playerResponse = extractJsonObjectAfterMarker(html, "var ytInitialPlayerResponse = ");
+    const tracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    if (tracks.length) {
+      const defaultTrackIndex = playerResponse?.captions?.playerCaptionsTracklistRenderer?.audioTracks?.[0]?.defaultCaptionTrackIndex ?? 0;
+      return {
+        defaultTrackIndex,
+        tracks: tracks.map((track) => ({
+          baseUrl: track.baseUrl,
+          languageCode: track.languageCode,
+          kind: track.kind || "",
+          isTranslatable: Boolean(track.isTranslatable),
+          label: trackLabelFrom(track)
+        }))
+      };
+    }
+  } catch (error) {
+    console.warn(`[transcript] html caption fallback failed for ${videoId}: ${String(error?.message || error)}`);
+  }
+
+  try {
+    const info = await ytdl.getInfo(videoId);
+    const ytdlTracks = info?.player_response?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+    if (ytdlTracks.length) {
+      const defaultTrackIndex = info?.player_response?.captions?.playerCaptionsTracklistRenderer?.audioTracks?.[0]?.defaultCaptionTrackIndex ?? 0;
+      return {
+        defaultTrackIndex,
+        tracks: ytdlTracks.map((track) => ({
+          baseUrl: track.baseUrl,
+          languageCode: track.languageCode,
+          kind: track.kind || "",
+          isTranslatable: Boolean(track.isTranslatable),
+          label: trackLabelFrom(track)
+        }))
+      };
+    }
+  } catch (error) {
+    console.warn(`[transcript] ytdl caption fallback failed for ${videoId}: ${String(error?.message || error)}`);
+  }
+
+  throw new Error("No caption tracks were available for this video on the deployed server.");
+}
+
+async function handleTranscriptApi(requestUrl, response) {
+  const videoId = extractVideoId(requestUrl.searchParams.get("videoId"));
+  const trackIndex = Number(requestUrl.searchParams.get("trackIndex") || "0");
+  const language = requestUrl.searchParams.get("lang") || "ja";
+  const provider = requestUrl.searchParams.get("provider") || "google";
+
+  if (!videoId) {
+    sendJson(response, 400, { error: "Missing or invalid videoId." });
+    return;
+  }
+
+  try {
+    const payload = await getTranscriptWithAggressiveFallback(videoId, trackIndex, language, provider);
+    sendJson(response, 200, payload);
+  } catch (error) {
+    console.error(`[transcript] failed for videoId=${videoId} trackIndex=${trackIndex} lang=${language} provider=${provider}`, error);
+    sendJson(response, 500, {
+      error: error.message || "Failed to fetch transcript."
+    });
   }
 }
 
